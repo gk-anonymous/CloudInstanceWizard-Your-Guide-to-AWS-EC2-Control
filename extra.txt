@@ -1,0 +1,230 @@
+
+import boto3
+
+# Set up your AWS login credentials
+aws_access_key_id = 'AKIAWHOQ7MCLSCE6YYKL'
+aws_secret_access_key = 'yRX57FwwRtmcwgjDdnj5TcfJ+qxx+ZSONGY0JV5u'
+region_name = 'ap-south-1'  # Replace with your desired region
+
+# Create a session
+session = boto3.Session(
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key,
+    region_name=region_name
+)
+
+# Create an EC2 resource and client
+ec2_resource = session.resource('ec2')
+ec2_client = session.client('ec2')
+
+# Describe EC2 instances
+response = ec2_client.describe_instances()
+
+# Extract and print instance details
+def print_instance_details(instance):
+    instance_id = instance['InstanceId']
+    state = instance['State']['Name']
+
+    # Get instance name if available
+    name = ''
+    for tag in instance.get('Tags', []):
+        if tag['Key'] == 'Name':
+            name = tag['Value']
+            break
+
+    print(f"Instance ID: {instance_id}")
+    print(f"State: {state}")
+    print(f"Name: {name}")
+    print('---')
+
+while True:
+    # Prompt user to choose an action
+    choice = input("Choose an action:\n1. Start an instance\n2. Stop an instance\n3. Stop all containers\n4. See instance details\n5. Show running status of all containers\n6. Launch an instance\n7. Add an EBS volume\n8. Exit\nEnter your choice: ")
+
+    if choice == '1':
+        # Get the instance name from user input
+        instance_name = input("Enter the instance name to start: ")
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                state = instance['State']['Name']
+                name = ''
+                for tag in instance.get('Tags', []):
+                    if tag['Key'] == 'Name':
+                        name = tag['Value']
+                        break
+
+                if name == instance_name:
+                    instance_id = instance['InstanceId']
+                    if state == 'stopped':
+                        # Start the EC2 instance
+                        ec2_client.start_instances(InstanceIds=[instance_id])
+                        print(f"Started instance with name '{instance_name}' and ID: {instance_id}")
+                    else:
+                        print(f"The instance '{instance_name}' is already running.")
+                    break
+            else:
+                continue
+            break
+        else:
+            print(f"No stopped instance found with name '{instance_name}'")
+
+    elif choice == '2':
+        # Get the instance name from user input
+        instance_name = input("Enter the instance name to stop: ")
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                state = instance['State']['Name']
+                name = ''
+                for tag in instance.get('Tags', []):
+                    if tag['Key'] == 'Name':
+                        name = tag['Value']
+                        break
+
+                if name == instance_name:
+                    instance_id = instance['InstanceId']
+                    if state == 'running':
+                        # Stop the EC2 instance
+                        ec2_client.stop_instances(InstanceIds=[instance_id])
+                        print(f"Stopped instance with name '{instance_name}' and ID: {instance_id}")
+                    else:
+                        print(f"The instance '{instance_name}' is already stopped.")
+                    break
+            else:
+                continue
+            break
+        else:
+            print(f"No running instance found with name '{instance_name}'")
+
+    elif choice == '3':
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                # Stop the EC2 instance
+                instance_id = instance['InstanceId']
+                ec2_client.stop_instances(InstanceIds=[instance_id])
+                print(f"Stopped instance with ID: {instance_id}")
+
+    elif choice == '4':
+        instance_id = input("Enter the instance ID to see details: ")
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                if instance['InstanceId'] == instance_id:
+                    print_instance_details(instance)
+                    # Get security, networking, storage, and monitoring details
+                    security_groups = instance.get('SecurityGroups', [])
+                    network_interfaces = instance.get('NetworkInterfaces', [])
+                    block_device_mappings = instance.get('BlockDeviceMappings', [])
+                    monitoring = instance.get('Monitoring', {})
+
+                    # Print security group details
+                    print("Security Groups:")
+                    for security_group in security_groups:
+                        group_id = security_group['GroupId']
+                        group_name = security_group['GroupName']
+                        print(f"  Group ID: {group_id}")
+                        print(f"  Group Name: {group_name}")
+                        print('---')
+
+                    # Print network interface details
+                    print("Network Interfaces:")
+                    for network_interface in network_interfaces:
+                        interface_id = network_interface['NetworkInterfaceId']
+                        private_ip = network_interface['PrivateIpAddress']
+                        public_ip = network_interface.get('Association', {}).get('PublicIp')
+                        print(f"  Interface ID: {interface_id}")
+                        print(f"  Private IP: {private_ip}")
+                        print(f"  Public IP: {public_ip}")
+                        print('---')
+
+                    # Print block device mapping details
+                    print("Block Device Mappings:")
+                    for block_device_mapping in block_device_mappings:
+                        device_name = block_device_mapping['DeviceName']
+                        volume_id = block_device_mapping['Ebs']['VolumeId']
+                        print(f"  Device Name: {device_name}")
+                        print(f"  Volume ID: {volume_id}")
+                        print('---')
+
+                    # Print monitoring details
+                    state = monitoring.get('State', '')
+                    print("Monitoring:")
+                    print(f"  State: {state}")
+                    print('---')
+
+                    break
+            else:
+                continue
+            break
+        else:
+            print(f"No instance found with ID: {instance_id}")
+
+    elif choice == '5':
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                print_instance_details(instance)
+        print('---')
+
+    elif choice == '6':
+        # Get the instance parameters from user input
+        instance_name = input("Enter the instance name: ")
+        instance_type = input("Enter the instance type (e.g., t2.micro): ")
+        image_id = input("Enter the AMI image ID (e.g., ami-xxxxxxxx): ")
+        key_name = input("Enter the key pair name: ")
+
+        # Launch the EC2 instance
+        instance = ec2_resource.create_instances(
+            ImageId=image_id,
+            InstanceType=instance_type,
+            MinCount=1,
+            MaxCount=1,
+            KeyName=key_name,
+            TagSpecifications=[
+                {
+                    'ResourceType': 'instance',
+                    'Tags': [
+                        {
+                            'Key': 'Name',
+                            'Value': instance_name
+                        },
+                    ]
+                },
+            ]
+        )[0]
+
+        print(f"Launched instance with name '{instance_name}' and ID: {instance.id}")
+
+    elif choice == '7':
+        # Get the instance ID from user input
+        instance_id = input("Enter the instance ID to add the EBS volume: ")
+
+        # Get the volume parameters from user input
+        volume_size = int(input("Enter the volume size (in GB): "))
+        volume_type = input("Enter the volume type (e.g., gp2): ")
+
+        # Create and attach the EBS volume to the instance
+        response = ec2_client.create_volume(
+            AvailabilityZone=region_name + 'a',  # Replace with your desired availability zone
+            Size=volume_size,
+            VolumeType=volume_type
+        )
+
+        volume_id = response['VolumeId']
+
+        # Wait for the volume to be available
+        waiter = ec2_client.get_waiter('volume_available')
+        waiter.wait(VolumeIds=[volume_id])
+
+        # Attach the volume to the instance
+        response = ec2_client.attach_volume(
+            Device='/dev/sdf',  # Replace with the desired device name
+            InstanceId=instance_id,
+            VolumeId=volume_id
+        )
+
+        print(f"Added EBS volume with ID: {volume_id} to instance with ID: {instance_id}")
+
+    elif choice == '8':
+        print("Exiting the code...")
+        break
+
+    else:
+        print("Invalid choice. Please choose a valid option.")
